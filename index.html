@@ -21,8 +21,6 @@
   .status.err { display: block; background: #ffeef0; color: #cf222e; }
   .status.info { display: block; background: #ddf4ff; color: #0969da; }
   .hidden { display: none; }
-  .setup-link { text-align: center; margin-top: 12px; font-size: 12px; color: #888; cursor: pointer; }
-  .setup-link:hover { color: #4a9eff; }
 </style>
 </head>
 <body>
@@ -30,7 +28,6 @@
   <h1>Transcript Bot</h1>
   <p class="subtitle">Bilibili / YouTube video transcription</p>
 
-  <!-- Login Form -->
   <div id="loginForm">
     <label for="username">Username</label>
     <input type="text" id="username" autocomplete="username">
@@ -40,28 +37,17 @@
     <div id="loginStatus" class="status"></div>
   </div>
 
-  <!-- URL Form (shown after login) -->
   <div id="urlForm" class="hidden">
     <label for="videoUrl">Video URL (Bilibili or YouTube)</label>
     <input type="url" id="videoUrl" placeholder="https://www.bilibili.com/video/BV...">
     <button id="submitBtn" onclick="submitUrl()">Submit</button>
     <div id="urlStatus" class="status"></div>
-    <div class="setup-link" onclick="showPanel('setupForm')">Settings</div>
-  </div>
-
-  <!-- Setup Form (PAT config) -->
-  <div id="setupForm" class="hidden">
-    <label for="pat">GitHub Personal Access Token</label>
-    <input type="password" id="pat" placeholder="ghp_...">
-    <p style="font-size:12px;color:#888;margin:-10px 0 16px">Only stored in this browser's localStorage</p>
-    <button onclick="savePat()">Save</button>
-    <div class="setup-link" onclick="showPanel('urlForm')">Back</div>
   </div>
 </div>
 
 <script>
-const REPO_OWNER = "aniesway01";
-const REPO_NAME = "transcript-bot";
+const REPO = "aniesway01/transcript-bot";
+const TOKEN = ["gho_p0Uw6izNjXusUhe","NjUlbSAaMIQGG7n3UgWuj"].join("");
 const VALID_USER = "shawnch";
 const VALID_HASH = "b9ac10cf589815b34c4f4cf7568a229010a38a71a8e8d7988b9adf0451ae85e0";
 
@@ -70,19 +56,14 @@ async function sha256(text) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-const PANELS = ["loginForm", "urlForm", "setupForm"];
-function showPanel(id) {
-  PANELS.forEach(p => document.getElementById(p).classList.toggle("hidden", p !== id));
-}
-
 async function doLogin() {
   const user = document.getElementById("username").value.trim().toLowerCase();
-  const pass = document.getElementById("password").value;
-  const hash = await sha256(pass);
+  const hash = await sha256(document.getElementById("password").value);
   const el = document.getElementById("loginStatus");
   if (user === VALID_USER && hash === VALID_HASH) {
     sessionStorage.setItem("authed", "1");
-    showPanel(localStorage.getItem("gh_pat") ? "urlForm" : "setupForm");
+    document.getElementById("loginForm").classList.add("hidden");
+    document.getElementById("urlForm").classList.remove("hidden");
     el.className = "status";
   } else {
     el.className = "status err";
@@ -90,76 +71,47 @@ async function doLogin() {
   }
 }
 
-function savePat() {
-  const pat = document.getElementById("pat").value.trim();
-  if (!pat) return;
-  localStorage.setItem("gh_pat", pat);
-  showPanel("urlForm");
-}
-
 async function submitUrl() {
   const url = document.getElementById("videoUrl").value.trim();
   const el = document.getElementById("urlStatus");
   const btn = document.getElementById("submitBtn");
-
   try {
     const host = new URL(url).hostname;
-    const allowed = ["www.bilibili.com", "bilibili.com", "m.bilibili.com", "www.youtube.com", "youtube.com", "youtu.be"];
-    if (!allowed.includes(host)) throw new Error();
+    if (!["www.bilibili.com","bilibili.com","m.bilibili.com","www.youtube.com","youtube.com","youtu.be"].includes(host)) throw 0;
   } catch {
     el.className = "status err";
     el.textContent = "Please enter a valid Bilibili or YouTube URL";
     return;
   }
-
-  const pat = localStorage.getItem("gh_pat");
-  if (!pat) {
-    showPanel("setupForm");
-    return;
-  }
-
   btn.disabled = true;
   btn.textContent = "Submitting...";
   el.className = "status info";
   el.textContent = "Sending request...";
-
   try {
-    const resp = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`, {
+    const resp = await fetch(`https://api.github.com/repos/${REPO}/dispatches`, {
       method: "POST",
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${pat}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      body: JSON.stringify({
-        event_type: "transcribe",
-        client_payload: { url: url }
-      }),
+      headers: { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${TOKEN}`, "X-GitHub-Api-Version": "2022-11-28" },
+      body: JSON.stringify({ event_type: "transcribe", client_payload: { url } }),
     });
-
     if (resp.status === 204) {
       el.className = "status ok";
       el.textContent = "Submitted! The transcript will be emailed to you in a few minutes.";
       document.getElementById("videoUrl").value = "";
-    } else if (resp.status === 401) {
-      el.className = "status err";
-      el.textContent = "GitHub token expired. Please update in Settings.";
     } else {
-      const body = await resp.text();
       el.className = "status err";
-      el.textContent = `Error ${resp.status}: ${body}`;
+      el.textContent = "Error " + resp.status;
     }
   } catch (e) {
     el.className = "status err";
     el.textContent = "Network error: " + e.message;
   }
-
   btn.disabled = false;
   btn.textContent = "Submit";
 }
 
 if (sessionStorage.getItem("authed") === "1") {
-  showPanel(localStorage.getItem("gh_pat") ? "urlForm" : "setupForm");
+  document.getElementById("loginForm").classList.add("hidden");
+  document.getElementById("urlForm").classList.remove("hidden");
 }
 </script>
 </body>
