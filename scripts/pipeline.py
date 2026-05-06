@@ -36,13 +36,19 @@ def download_and_get_metadata(url: str, output_dir: Path) -> tuple:
     """
     log.info("[DL] Downloading audio + metadata...")
     output_path = output_dir / "audio.mp3"
+    cmd = [
+        "yt-dlp", "-x", "--audio-format", "mp3",
+        "--audio-quality", "5", "--print-json",
+        "-o", str(output_path.with_suffix(".%(ext)s")),
+    ]
+    cookie_str = os.environ.get("BILIBILI_COOKIES", "")
+    if cookie_str and "bilibili" in url:
+        cookie_file = output_dir / "cookies.txt"
+        cookie_file.write_text(cookie_str, encoding="utf-8")
+        cmd.extend(["--cookies", str(cookie_file)])
+    cmd.append(url)
     result = subprocess.run(
-        [
-            "yt-dlp", "-x", "--audio-format", "mp3",
-            "--audio-quality", "5", "--print-json",
-            "-o", str(output_path.with_suffix(".%(ext)s")),
-            url,
-        ],
+        cmd,
         capture_output=True, timeout=1800, encoding="utf-8", errors="replace"
     )
     if result.returncode != 0:
