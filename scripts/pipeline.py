@@ -142,7 +142,7 @@ def _transcribe_chunked(audio_path: Path) -> dict:
 
 
 def generate_summary(transcript_text: str, title: str) -> str:
-    log.info("[LLM] Generating summary with NVIDIA DeepSeek V4 Flash...")
+    log.info("[LLM] Generating summary...")
     prompt = f"""You are a content analyst. Analyze the following transcript of a video titled "{title}".
 
 Please provide your response entirely in Chinese:
@@ -171,25 +171,27 @@ Here is the transcript:
         "Authorization": f"Bearer {NVIDIA_API_KEY}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": "deepseek-ai/deepseek-v4-flash",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-        "max_tokens": 4000,
-    }
-    resp = requests.post(url, headers=headers, json=payload, timeout=180)
-    if resp.status_code == 200:
-        text = resp.json()["choices"][0]["message"]["content"]
-        log.info(f"[LLM] Summary generated, {len(text)} chars")
-        return text
+    models = ["meta/llama-3.3-70b-instruct", "deepseek-ai/deepseek-v4-flash"]
+    for model in models:
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 4000,
+        }
+        log.info(f"[LLM] Trying {model}...")
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=180)
+        except requests.exceptions.ReadTimeout:
+            log.warning(f"[LLM] {model} timed out, trying next...")
+            continue
+        if resp.status_code == 200:
+            text = resp.json()["choices"][0]["message"]["content"]
+            log.info(f"[LLM] Summary generated, {len(text)} chars")
+            return text
+        log.warning(f"[LLM] {model} failed ({resp.status_code}), trying next...")
 
-    log.warning(f"[LLM] DeepSeek failed ({resp.status_code}), trying llama-3.3-70b fallback...")
-    payload["model"] = "meta/llama-3.3-70b-instruct"
-    resp = requests.post(url, headers=headers, json=payload, timeout=180)
-    if resp.status_code == 200:
-        return resp.json()["choices"][0]["message"]["content"]
-
-    log.error(f"[LLM] All providers failed: {resp.status_code}")
+    log.error("[LLM] All providers failed")
     return "## Summary\n\n(Summary generation failed)\n\n## Timeline\n\n(Timeline generation failed)"
 
 
