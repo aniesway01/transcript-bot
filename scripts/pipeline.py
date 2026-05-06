@@ -41,7 +41,7 @@ def download_and_get_metadata(url: str, output_dir: Path) -> tuple:
         "--audio-quality", "5", "--print-json",
         "-o", str(output_path.with_suffix(".%(ext)s")),
     ]
-    cookie_str = os.environ.get("BILIBILI_COOKIES", "")
+    cookie_str = os.environ.get("BILIBILI_COOKIES", "").lstrip("﻿").strip()
     if cookie_str and "bilibili" in url:
         cookie_file = output_dir / "cookies.txt"
         cookie_file.write_text(cookie_str, encoding="utf-8")
